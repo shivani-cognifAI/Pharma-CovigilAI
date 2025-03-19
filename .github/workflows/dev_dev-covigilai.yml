@@ -1,0 +1,67 @@
+# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
+# More GitHub Actions for Azure: https://github.com/Azure/actions
+
+name: Build and deploy to Azure App Service
+
+on:
+  push:
+    branches:
+      - dev
+  workflow_dispatch:
+
+env:
+  AZURE_WEBAPP_NAME: CoVigilAI-App-Demo
+  AZURE_CONTAINER_REGISTRY: covigilai.azurecr.io
+  CONTAINER_IMAGE_NAME: covigilai-fe/covigilai-fe
+  AZURE_RESOURCE_GROUP: CoVigilAI_RG
+  AZURE_KEY_VAULT_NAME: CoVigilAI-App-Demo
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+        
+      - name: Log in to Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      
+      - name: Get secrets from Azure Key Vault
+        id: get-secrets
+        run: |
+          # Get secrets from Key Vault using Azure CLI
+          echo "API_BASE_URL=$(az keyvault secret show --vault-name ${{ env.AZURE_KEY_VAULT_NAME }} --name NEXT-PUBLIC-API-BASE-URL --query value -o tsv)" >> $GITHUB_OUTPUT
+          echo "CURRENT_APP_BASE_URL=$(az keyvault secret show --vault-name ${{ env.AZURE_KEY_VAULT_NAME }} --name NEXT-PUBLIC-CURRENT-APP-BASE-URL --query value -o tsv)" >> $GITHUB_OUTPUT
+          echo "FULLTEXT_VENDOR_EMAIL=$(az keyvault secret show --vault-name ${{ env.AZURE_KEY_VAULT_NAME }} --name NEXT-PUBLIC-FULLTEXT-VENDOR-EMAIL --query value -o tsv)" >> $GITHUB_OUTPUT
+          echo "MAPPING_ID=$(az keyvault secret show --vault-name ${{ env.AZURE_KEY_VAULT_NAME }} --name NEXT-PUBLIC-MAPPING-ID --query value -o tsv)" >> $GITHUB_OUTPUT
+          
+      - name: Log in to ACR
+        uses: azure/docker-login@v1
+        with:
+          login-server: ${{ env.AZURE_CONTAINER_REGISTRY }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+          
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: ${{ env.AZURE_CONTAINER_REGISTRY }}/${{ env.CONTAINER_IMAGE_NAME }}:${{ github.sha }}, ${{ env.AZURE_CONTAINER_REGISTRY }}/${{ env.CONTAINER_IMAGE_NAME }}:latest
+          build-args: |
+            NEXT_PUBLIC_API_BASE_URL=${{ steps.get-secrets.outputs.API_BASE_URL }}
+            NEXT_PUBLIC_CURRENT_APP_BASE_URL=${{ steps.get-secrets.outputs.CURRENT_APP_BASE_URL }}
+            NEXT_PUBLIC_FULLTEXT_VENDOR_EMAIL=${{ steps.get-secrets.outputs.FULLTEXT_VENDOR_EMAIL }}
+            NEXT_PUBLIC_MAPPING_ID=${{ steps.get-secrets.outputs.MAPPING_ID }}
+          
+      - name: Deploy to Azure App Service
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          images: ${{ env.AZURE_CONTAINER_REGISTRY }}/${{ env.CONTAINER_IMAGE_NAME }}:${{ github.sha }}
