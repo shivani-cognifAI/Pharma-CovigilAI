@@ -46,6 +46,9 @@ jobs:
           ###### End of Repository/Build Configurations ######
     env:
           NEXT_PUBLIC_API_BASE_URL: ${{ secrets.NEXT_PUBLIC_API_BASE_URL }}
+          _CUSTOM_IMAGE: ${{ secrets._CUSTOM_IMAGE }}
+          NEXT_PUBLIC_FULLTEXT_VENDOR_EMAIL: ${{ secrets.NEXT_PUBLIC_FULLTEXT_VENDOR_EMAIL }}
+          NEXT_PUBLIC_MAPPING_ID: ${{ secrets.NEXT_PUBLIC_MAPPING_ID }}
 
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
