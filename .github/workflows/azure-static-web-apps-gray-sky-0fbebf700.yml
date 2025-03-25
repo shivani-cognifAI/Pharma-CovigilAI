@@ -14,14 +14,51 @@ jobs:
     if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
     runs-on: ubuntu-latest
     name: Build and Deploy Job
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - uses: actions/checkout@v3
         with:
           submodules: true
           lfs: false
 
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: 9325f160-19c8-463d-ba25-65471604024b
+          tenant-id: b0e81e53-f19c-4c42-b666-5efc7ed1483d
+          subscription-id: 8bf3463e-1f0e-42b2-97fd-c65a5d2d506a
+          audience: api://AzureADTokenExchange
+
+      - name: Retrieve Secrets from Azure Key Vault
+        id: keyvault
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            set -e
+            # Fetch API Base URL
+            api_url=$(az keyvault secret show --vault-name 'testkeyvault12name' --name "NEXT-PUBLIC-API-BASE-URL" --query value -o tsv)
+            echo "api_base_url=$api_url" >> $GITHUB_OUTPUT
+
+            # Fetch Current App Base URL
+            app_url=$(az keyvault secret show --vault-name 'testkeyvault12name' --name "NEXT-PUBLIC-CURRENT-APP-BASE-URL" --query value -o tsv)
+            echo "app_base_url=$app_url" >> $GITHUB_OUTPUT
+
+            # Fetch Vendor Email
+            vendor_email=$(az keyvault secret show --vault-name 'testkeyvault12name' --name "NEXT-PUBLIC-FULLTEXT-VENDOR-EMAIL" --query value -o tsv)
+            echo "vendor_email=$vendor_email" >> $GITHUB_OUTPUT
+
+            # Fetch Mapping ID
+            mapping_id=$(az keyvault secret show --vault-name 'testkeyvault12name' --name "NEXT-PUBLIC-MAPPING-ID" --query value -o tsv)
+            echo "mapping_id=$mapping_id" >> $GITHUB_OUTPUT
+
       - name: Set Environment Variables
-        run: echo "NEXT_PUBLIC_API_BASE_URL=${{ secrets.NEXT_PUBLIC_API_BASE_URL }}" >> $GITHUB_ENV
+        run: |
+          echo "NEXT_PUBLIC_API_BASE_URL=${{ steps.keyvault.outputs.api_base_url }}" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_CURRENT_APP_BASE_URL=${{ steps.keyvault.outputs.app_base_url }}" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_FULLTEXT_VENDOR_EMAIL=${{ steps.keyvault.outputs.vendor_email }}" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_MAPPING_ID=${{ steps.keyvault.outputs.mapping_id }}" >> $GITHUB_ENV
 
       - name: Install Dependencies
         run: npm install
@@ -30,14 +67,18 @@ jobs:
         run: npm run build
 
       - name: Debug Environment Variables
-        run: echo "NEXT_PUBLIC_API_BASE_URL is $NEXT_PUBLIC_API_BASE_URL"
+        run: |
+          echo "NEXT_PUBLIC_API_BASE_URL is $NEXT_PUBLIC_API_BASE_URL"
+          echo "NEXT_PUBLIC_CURRENT_APP_BASE_URL is $NEXT_PUBLIC_CURRENT_APP_BASE_URL"
+          echo "NEXT_PUBLIC_FULLTEXT_VENDOR_EMAIL is $NEXT_PUBLIC_FULLTEXT_VENDOR_EMAIL"
+          echo "NEXT_PUBLIC_MAPPING_ID is $NEXT_PUBLIC_MAPPING_ID"
 
       - name: Build And Deploy
         id: builddeploy
         uses: Azure/static-web-apps-deploy@v1
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_GRAY_SKY_0FBEBF700 }}
-          repo_token: ${{ secrets.GITHUB_TOKEN }} # Used for Github integrations (i.e. PR comments)
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: "upload"
           ###### Repository/Build Configurations - These values can be configured to match your app requirements. ######
           app_location: "/" # App source code path
