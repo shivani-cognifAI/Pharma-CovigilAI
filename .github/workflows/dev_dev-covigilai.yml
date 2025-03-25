@@ -34,13 +34,26 @@ jobs:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Retrieve Secrets from Azure Key Vault
-        id: get-secrets
-        run: |
-          echo "Retrieving secrets from Azure Key Vault..."
-          echo "API_BASE_URL=$(az keyvault secret show --vault-name ${{ env.AZURE_KEY_VAULT_NAME }} --name NEXT-PUBLIC-API-BASE-URL --query value -o tsv)" >> $GITHUB_ENV
-          echo "CURRENT_APP_BASE_URL=$(az keyvault secret show --vault-name ${{ env.AZURE_KEY_VAULT_NAME }} --name NEXT-PUBLIC-CURRENT-APP-BASE-URL --query value -o tsv)" >> $GITHUB_ENV
-          echo "FULLTEXT_VENDOR_EMAIL=$(az keyvault secret show --vault-name ${{ env.AZURE_KEY_VAULT_NAME }} --name NEXT-PUBLIC-FULLTEXT-VENDOR-EMAIL --query value -o tsv)" >> $GITHUB_ENV
-          echo "MAPPING_ID=$(az keyvault secret show --vault-name ${{ env.AZURE_KEY_VAULT_NAME }} --name NEXT-PUBLIC-MAPPING-ID --query value -o tsv)" >> $GITHUB_ENV
+        id: keyvault
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            set -e
+            # Fetch API Base URL
+            api_url=$(az keyvault secret show --vault-name 'testkeyvault12name' --name "NEXT-PUBLIC-API-BASE-URL" --query value -o tsv)
+            echo "api_base_url=$api_url" >> $GITHUB_OUTPUT
+
+            # Fetch Current App Base URL
+            app_url=$(az keyvault secret show --vault-name 'testkeyvault12name' --name "NEXT-PUBLIC-CURRENT-APP-BASE-URL" --query value -o tsv)
+            echo "app_base_url=$app_url" >> $GITHUB_OUTPUT
+
+            # Fetch Vendor Email
+            vendor_email=$(az keyvault secret show --vault-name 'testkeyvault12name' --name "NEXT-PUBLIC-FULLTEXT-VENDOR-EMAIL" --query value -o tsv)
+            echo "vendor_email=$vendor_email" >> $GITHUB_OUTPUT
+
+            # Fetch Mapping ID
+            mapping_id=$(az keyvault secret show --vault-name 'testkeyvault12name' --name "NEXT-PUBLIC-MAPPING-ID" --query value -o tsv)
+            echo "mapping_id=$mapping_id" >> $GITHUB_OUTPUT
 
       - name: Log in to Azure Container Registry (ACR)
         uses: azure/docker-login@v1
